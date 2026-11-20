@@ -1,3 +1,5 @@
+/* global hooks, tests */
+
 const app = {
   testIndex: -1,
 
@@ -10,12 +12,12 @@ const app = {
 
     var onlyFlaggedTests = [];
     var enabledTests = [];
-  
+
     tests.forEach(function (test) {
       if (test.only) {
         onlyFlaggedTests.push(test);
       }
-  
+
       if (!test.disabled) {
         enabledTests.push(test);
       }
@@ -46,6 +48,16 @@ const app = {
 
     app.lastResult = {
       type: 'resolved',
+      data: content
+    };
+  },
+
+  skip: function (content) {
+    document.getElementById('statusInput').value = 'finished';
+    app.printResult('result - skipped', content);
+
+    app.lastResult = {
+      type: 'skipped',
       data: content
     };
   },
@@ -126,7 +138,7 @@ const app = {
 
     const execTest = function () {
       try {
-        testDefinition.func(app.resolve, app.reject);
+        testDefinition.func(app.resolve, app.reject, app.skip);
       } catch (error) {
         app.throw(error);
       }

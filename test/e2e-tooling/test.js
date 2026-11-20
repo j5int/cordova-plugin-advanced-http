@@ -7,6 +7,9 @@ const testDefinitions = require('../e2e-specs');
 
 global.should = chai.should();
 
+let driver;
+let allPassed = true;
+
 describe('Advanced HTTP e2e test suite', function () {
   const isSauceLabs = !!process.env.SAUCE_USERNAME;
   const isBrowserStack = !!process.env.BROWSERSTACK_USERNAME;
@@ -16,9 +19,6 @@ describe('Advanced HTTP e2e test suite', function () {
 
   const targetInfo = { isSauceLabs, isBrowserStack, isDevice, isAndroid };
   const environment = isSauceLabs ? 'saucelabs' : isBrowserStack ? 'browserstack' : 'local';
-
-  let driver;
-  let allPassed = true;
 
   this.timeout(15000);
   this.slow(4000);
@@ -49,12 +49,19 @@ describe('Advanced HTTP e2e test suite', function () {
   });
 
   const defineTestForMocha = (test, index) => {
-    it(index + ': ' + test.description, async () => {
+    it(index + ': ' + test.description, async function () {
       await clickNext(driver);
       await validateTestIndex(driver, index);
       await validateTestTitle(driver, test.description);
       await waitToBeFinished(driver, test.timeout || 10000);
-      await validateResult(driver, test.validationFunc, targetInfo);
+
+      const skipped = await checkSkipped(driver);
+
+      if (skipped) {
+        this.skip();
+      } else {
+        await validateResult(driver, test.validationFunc, targetInfo);
+      }
     });
   };
 
@@ -91,7 +98,7 @@ async function validateTestIndex(driver, testIndex) {
 
 async function validateTestTitle(driver, testTitle) {
   const description = await driver.elementById('descriptionLbl').text();
-  const title = description.match(/\d+:\ (.*)/)[1];
+  const title = description.match(/\d+: (.*)/)[1];
 
   title.should.be.equal(testTitle, 'Test description is not matching!');
 }
@@ -99,6 +106,7 @@ async function validateTestTitle(driver, testTitle) {
 async function waitToBeFinished(driver, timeout) {
   const timeoutTimestamp = Date.now() + timeout;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (await driver.elementById('statusInput').getValue() === 'finished') {
       return true;
@@ -114,7 +122,20 @@ async function waitToBeFinished(driver, timeout) {
 
 async function validateResult(driver, validationFunc, targetInfo) {
   const result = await driver.safeExecute('app.lastResult');
-  validationFunc(driver, result, targetInfo);
+
+  try {
+    validationFunc(driver, result, targetInfo);
+  } catch (error) {
+    allPassed = false;
+    error.details = result;
+
+    throw error;
+  }
+}
+
+async function checkSkipped(driver) {
+  const result = await driver.safeExecute('app.lastResult');
+  return result.type === 'skipped';
 }
 
 function sleep(ms) {
